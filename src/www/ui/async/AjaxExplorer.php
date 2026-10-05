@@ -70,6 +70,8 @@ class AjaxExplorer extends DefaultPlugin
    * Array to hold item tree which are already calculated */
   private $cacheClearedCounter;
 
+  private $scannerFindingsCache = [];
+
   public function __construct()
   {
     parent::__construct(self::NAME, array(
@@ -109,6 +111,7 @@ class AjaxExplorer extends DefaultPlugin
    */
   public function handle(Request $request)
   {
+    $this->scannerFindingsCache = [];
     $upload = intval($request->get("upload"));
     $groupId = Auth::getGroupId();
     if (!$this->uploadDao->isAccessible($upload, $groupId)) {
@@ -516,7 +519,7 @@ class AjaxExplorer extends DefaultPlugin
      */
     $pfileLicenses = [];
     foreach ($agentIds as $agentName => $agentId) {
-      $licensePerPfile = $this->licenseDao->getLicenseIdPerPfileForAgentId(
+      $licensePerPfile = $this->getScannerFindings(
         $itemTreeBounds, $agentId, $isFlat, $nameRange);
       foreach ($licensePerPfile as $pfile => $licenseRow) {
         foreach ($licenseRow as $licId => $row) {
@@ -561,6 +564,26 @@ class AjaxExplorer extends DefaultPlugin
     $editedMappedLicenses = array_replace($editedMappedLicenses,
       $this->clearingFilter->filterCurrentClearingDecisions($allDecisions));
     return $pfileLicenses;
+  }
+
+  private function getScannerFindings(ItemTreeBounds $itemTreeBounds, $agentId, $isFlat, $nameRange)
+  {
+    $cacheKey = serialize(array(
+      $itemTreeBounds->getUploadTreeTableName(),
+      $itemTreeBounds->getUploadId(),
+      $itemTreeBounds->getItemId(),
+      $itemTreeBounds->getLeft(),
+      $itemTreeBounds->getRight(),
+      $agentId,
+      $isFlat,
+      $nameRange
+    ));
+    if (!array_key_exists($cacheKey, $this->scannerFindingsCache)) {
+      $this->scannerFindingsCache[$cacheKey] =
+        $this->licenseDao->getLicenseIdPerPfileForAgentId(
+          $itemTreeBounds, $agentId, $isFlat, $nameRange);
+    }
+    return $this->scannerFindingsCache[$cacheKey];
   }
 
   /**
